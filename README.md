@@ -1,3 +1,4 @@
+
 🚀 The Mission
 SkillLens AI is a multilingual, accessibility-first skilling platform designed for rural, vernacular, and differently-abled learners. By moving the "AI Brain" from the cloud to the AMD Ryzen™ AI NPU, we provide high-quality tutoring with zero daily data consumption and 100% privacy.
 
@@ -58,14 +59,4 @@ Demo Video: [Link to your YouTube/Drive Video]
 
 Task Manager: During inference, observe the NPU/GPU utilization in Windows Task Manager to verify local AMD execution.
 
-Next Steps for you:
-Open VS Code in your project folder.
-
-Create a new file named README.md.
-
-Paste the content above.
-
-Save and Push: ```powershell
-git add README.md
-git commit -m "Add official AMD Slingshot documentation"
-git push origin main
+:🎙️ Accessibility & InclusionSkillLens AI is built to ensure that no learner is left behind.Screen Reader Optimization: ARIA labels and semantic HTML for seamless navigation.Voice Commands: Integration with local Speech-to-Text (STT) so visually impaired students can interact naturally.Vernacular Switcher: Instant translation between English and regional Indian languages to bridge the rural-urban gap.🧠 Explainable AI (XAI) LogicUnlike ChatGPT which often gives the full answer immediately, SkillLens AI uses a Socratic Prompting technique:Level 1 (The Hint): If a student is stuck, the AI provides a conceptual hint.Level 2 (The Breakdown): If the student still struggles, the AI breaks the problem into smaller sub-tasks.Level 3 (The Analogy): The AI uses real-world examples (e.g., explaining "Gravity" using a falling cricket ball).🛠️ AMD Hardware Implementation DetailsComponentAMD SolutionRole in SkillLens AIEdge InferenceRyzen™ AI NPURuns the Phi-3 model locally to save data and battery.Model TrainingAMD Instinct™ GPUUsed to fine-tune the model on regional language datasets.BackendAMD EPYC™Handles user authentication and progress tracking for 1,000+ users.OptimizationROCm™ StackUsed to convert the model to FP16/INT8 for faster local performance.🛤️ Project Roadmap[x] Phase 1: Core Offline Chat Logic with Ollama & Phi-3.[ ] Phase 2: Multi-modal support (Analyzing images of hand-written notes).[ ] Phase 3: Integration with government skilling portals (e.g., Skill India).[ ] Phase 4: Specialized "Career Path" mapping for students based on their mastery levels.
