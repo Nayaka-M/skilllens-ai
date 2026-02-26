@@ -55,7 +55,7 @@ npm start
 Go Offline: Disconnect your Wi-Fi and experience the power of AMD Ryzen™ AI.
 
 🎥 Proof of Work
-Demo Video: [Link to your YouTube/Drive Video]
+Demo Video:https://drive.google.com/file/d/1lM-0aLw8tk1mEF8m0c_ChcLw7lrNMjFa/view?usp=sharing
 
 Task Manager: During inference, observe the NPU/GPU utilization in Windows Task Manager to verify local AMD execution.
 
