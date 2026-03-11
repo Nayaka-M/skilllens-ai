@@ -1,13 +1,41 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+
+:root {
+  --primary: #6366f1;
+  --bg-dark: #020617;
+  --neon-green: #4ade80;
+  --neon-blue: #00f2ff;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg-dark);
+  background-image: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.05), transparent 80%);
+  height: 100vh; color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; overflow: hidden;
 }
+
+.quest-card {
+  background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px;
+}
+
+@keyframes floatUp {
+  0% { transform: translate(-50%, 0); opacity: 1; }
+  100% { transform: translate(-50%, -100px); opacity: 0; }
+}
+
+.floating-xp {
+  position: fixed; pointer-events: none; color: var(--neon-green);
+  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.5rem;
+  z-index: 9999; animation: floatUp 1s ease-out forwards;
+}
+
+.action-btn {
+  background: var(--primary); color: white; border: none; border-radius: 12px;
+  font-family: 'Orbitron', sans-serif; font-weight: 700; cursor: pointer;
+}
+
+.action-btn:hover { background: #4f46e5; transform: scale(1.01); }
+
+.progress-fill { height: 100%; background: var(--primary); transition: width 0.4s ease; }
