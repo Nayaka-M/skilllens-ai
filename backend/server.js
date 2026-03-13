@@ -1,79 +1,74 @@
 const express = require('express');
 const { Pool } = require('pg');
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const bcrypt = require('bcryptjs');
 
 const app = express();
+const JWT_SECRET = "SKILLLENS_2026_KEY";
+
 app.use(cors());
 app.use(express.json());
 
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-app.use('/uploads', express.static(uploadDir));
-
 const pool = new Pool({
   user: 'postgres',
-  host: '127.0.0.1',
+  host: 'localhost',
   database: 'SKILLLENS-AI',
   password: 'Nayaka1&',
   port: 5432,
 });
 
-// Check Connection
-pool.connect((err) => {
-  if (err) console.error('❌ DB CONNECTION ERROR:', err.message);
-  else console.log('✅ DATABASE CONNECTED');
-});
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
-});
-const upload = multer({ storage });
-
-// --- UPDATED PROFILE ROUTE ---
-app.put('/api/profile/:username', async (req, res) => {
-  const { username } = req.params;
-  const { full_name, email, mobile } = req.body;
-  
+// Auth Middleware
+const authenticate = (req, res, next) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: "No Token" });
   try {
-    console.log(`Updating profile for: ${username}`); // Log for debugging
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (err) { res.status(401).json({ error: "Invalid Token" }); }
+};
+
+// --- AUTH ---
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, password } = req.body;
+  const hashed = await bcrypt.hash(password, 10);
+  try {
     const result = await pool.query(
-      'UPDATE users SET full_name = $1, email = $2, mobile = $3 WHERE username = $4',
-      [full_name || '', email || '', mobile || '', username]
+      "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email, level, xp",
+      [name, email, hashed]
     );
-    res.json({ message: "Update Successful" });
-  } catch (err) {
-    console.error("❌ SQL ERROR:", err.message); // This shows in your terminal
-    res.status(500).json({ error: err.message });
-  }
+    const token = jwt.sign({ id: result.rows[0].id }, JWT_SECRET);
+    res.json({ token, user: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: "Registration Error" }); }
 });
 
-// Get Profile & Stats
-app.get('/api/profile/:username', async (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
   try {
-    let user = await pool.query('SELECT * FROM users WHERE username = $1', [req.params.username]);
-    if (user.rows.length === 0) {
-      user = await pool.query('INSERT INTO users (username) VALUES ($1) RETURNING *', [req.params.username]);
-    }
-    const stats = await pool.query('SELECT COUNT(*) as total, COUNT(CASE WHEN completed_at::date = CURRENT_DATE THEN 1 END) as today FROM user_history WHERE username = $1', [req.params.username]);
-    res.json({ ...user.rows[0], stats: stats.rows[0] });
-  } catch (err) { res.status(500).send(err.message); }
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "User Not Found" });
+    const valid = await bcrypt.compare(password, result.rows[0].password);
+    if (!valid) return res.status(401).json({ error: "Invalid Password" });
+    
+    const token = jwt.sign({ id: result.rows[0].id }, JWT_SECRET);
+    const { password: _, ...user } = result.rows[0];
+    res.json({ token, user });
+  } catch (err) { res.status(500).json({ error: "Login Error" }); }
 });
 
-// History Routes
-app.post('/api/history', async (req, res) => {
+// --- HISTORY ---
+app.post('/api/history/save', authenticate, async (req, res) => {
+  const { session_name, transcript } = req.body;
   try {
-    await pool.query('INSERT INTO user_history (username, activity_name) VALUES ($1, $2)', [req.body.username, req.body.question]);
-    res.sendStatus(201);
-  } catch (e) { res.status(500).send(e.message); }
+    await pool.query("INSERT INTO chat_history (user_id, session_name, transcript) VALUES ($1, $2, $3)",
+      [req.user.id, session_name, JSON.stringify(transcript)]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/history/:username', async (req, res) => {
-  const result = await pool.query('SELECT * FROM user_history WHERE username = $1 ORDER BY completed_at DESC LIMIT 5', [req.params.username]);
+app.get('/api/history', authenticate, async (req, res) => {
+  const result = await pool.query("SELECT * FROM chat_history WHERE user_id = $1 ORDER BY created_at DESC", [req.user.id]);
   res.json(result.rows);
 });
 
-app.listen(5000, '127.0.0.1', () => console.log('🚀 Server running on http://127.0.0.1:5000'));
+app.listen(5000, () => console.log('Server running on 5000'));

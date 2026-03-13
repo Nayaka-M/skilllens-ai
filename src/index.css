@@ -1,41 +1,203 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+import React, { useState, useRef, useEffect } from 'react';
 
-:root {
-  --primary: #6366f1;
-  --bg-dark: #020617;
-  --neon-green: #4ade80;
-  --neon-blue: #00f2ff;
-}
+// --- SUB-COMPONENT: TYPEWRITER ---
+const Typewriter = ({ text, speed = 15 }) => {
+  const [displayedText, setDisplayedText] = useState('');
+  useEffect(() => {
+    let i = 0;
+    const timer = setInterval(() => {
+      setDisplayedText((p) => p + text.charAt(i));
+      i++;
+      if (i >= text.length) clearInterval(timer);
+    }, speed);
+    return () => clearInterval(timer);
+  }, [text, speed]);
+  return <span>{displayedText}</span>;
+};
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+// --- SUB-COMPONENT: GLITCH WRAPPER ---
+const GlitchWrapper = ({ text }) => {
+  const [isGlitching, setIsGlitching] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setIsGlitching(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <div className={isGlitching ? 'glitch-text' : ''}>
+      <Typewriter text={text} />
+    </div>
+  );
+};
 
-body {
-  background: var(--bg-dark);
-  background-image: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.05), transparent 80%);
-  height: 100vh; color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; overflow: hidden;
-}
+const ChatTerminal = ({ token, onUpdateUser }) => {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [ollamaStatus, setOllamaStatus] = useState('OFFLINE');
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [isBooting, setIsBooting] = useState(true);
+  const [bootLogs, setBootLogs] = useState([]);
+  
+  const scrollRef = useRef(null);
 
-.quest-card {
-  background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px;
-}
+  // 1. Boot sequence logic
+  useEffect(() => {
+    const logs = [
+      "> SKILLLENS_AI V3.0 INITIALIZING...",
+      "> LOCATING LOCAL OLLAMA INSTANCE...",
+      "> LOADING NEURAL WEIGHTS: PHI3_LATEST...",
+      "> SYSTEM SECURITY CHECK: OLLAMA_ORIGINS ALLOWED.",
+      "> USER IDENTIFIED: NAYAKA.",
+      "> SYSTEM READY."
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < logs.length) {
+        setBootLogs(prev => [...prev, logs[i]]);
+        i++;
+      } else {
+        clearInterval(interval);
+        setTimeout(() => setIsBooting(false), 800);
+      }
+    }, 350);
+    return () => clearInterval(interval);
+  }, []);
 
-@keyframes floatUp {
-  0% { transform: translate(-50%, 0); opacity: 1; }
-  100% { transform: translate(-50%, -100px); opacity: 0; }
-}
+  // 2. Ollama Status Watcher
+  useEffect(() => {
+    const checkConn = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:11434/api/tags');
+        setOllamaStatus(res.ok ? 'ONLINE' : 'ERROR');
+      } catch { setOllamaStatus('OFFLINE'); }
+    };
+    checkConn();
+    const interval = setInterval(checkConn, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-.floating-xp {
-  position: fixed; pointer-events: none; color: var(--neon-green);
-  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.5rem;
-  z-index: 9999; animation: floatUp 1s ease-out forwards;
-}
+  // 3. Scroll Logic
+  useEffect(() => {
+    if (autoScroll || isBooting) {
+      scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isTyping, bootLogs, isBooting, autoScroll]);
 
-.action-btn {
-  background: var(--primary); color: white; border: none; border-radius: 12px;
-  font-family: 'Orbitron', sans-serif; font-weight: 700; cursor: pointer;
-}
+  const speak = (txt) => {
+    if (isMuted) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(txt));
+  };
 
-.action-btn:hover { background: #4f46e5; transform: scale(1.01); }
+  const handleSend = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || isTyping) return;
 
-.progress-fill { height: 100%; background: var(--primary); transition: width 0.4s ease; }
+    const userText = input;
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    setMessages(p => [...p, { role: 'user', content: userText, time: now }]);
+    setInput('');
+    setIsTyping(true);
+
+    try {
+      const res = await fetch('http://127.0.0.1:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'phi3:latest', messages: [{ role: 'user', content: userText }], stream: false })
+      });
+
+      if (!res.ok) throw new Error("Link broken.");
+      const data = await res.json();
+      const aiReply = data.message.content;
+
+      if (token) {
+        fetch('http://localhost:5000/api/user/add-xp', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        }).then(r => r.json()).then(d => onUpdateUser(d)).catch(() => {});
+      }
+
+      setMessages(p => [...p, { role: 'ai', content: aiReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), animate: true }]);
+      speak(aiReply);
+    } catch (err) {
+      setMessages(p => [...p, { role: 'ai', content: `❌ SYSTEM_ERROR: CHECK_OLLAMA_ORIGINS` }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  if (isBooting) {
+    return (
+      <div style={s.bootContainer}>
+        <div className="scanline-effect"></div>
+        <div style={s.bootBox}>
+          {bootLogs.map((log, i) => <div key={i} className="glitch-text" style={s.bootLog}>{log}</div>)}
+          <div style={s.loaderBar}></div>
+          <div ref={scrollRef} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={s.container}>
+      <div className="scanline-effect"></div>
+      <div style={s.header}>
+        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+          <div style={{...s.dot, background: ollamaStatus === 'ONLINE' ? '#34d399' : '#ef4444'}}></div>
+          <span style={s.statusText}>{ollamaStatus}</span>
+          <button onClick={() => setAutoScroll(!autoScroll)} style={{...s.toggleBtn, color: autoScroll ? '#34d399' : '#475569'}}>
+            {autoScroll ? '[LOCK_ON]' : '[LOCK_OFF]'}
+          </button>
+        </div>
+        <div style={{display:'flex', gap:'8px'}}>
+          <button onClick={() => setIsMuted(!isMuted)} style={s.btnIco}>{isMuted ? '🔇' : '🔊'}</button>
+          <button onClick={() => window.speechSynthesis.cancel()} style={s.btnStop}>STOP</button>
+        </div>
+      </div>
+
+      <div style={s.chatArea}>
+        {messages.map((m, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', margin: '10px 0' }}>
+            <div style={{ ...s.bubble, background: m.role === 'user' ? '#34d399' : '#1e293b', color: m.role === 'user' ? '#000' : '#fff' }}>
+              {m.animate ? <GlitchWrapper text={m.content} /> : m.content}
+              <div style={{ ...s.timestamp, color: m.role === 'user' ? 'rgba(0,0,0,0.4)' : '#64748b' }}>{m.time}</div>
+            </div>
+          </div>
+        ))}
+        {isTyping && <div style={s.loader} className="glitch-text">ACCESSING_OLLAMA_CORE...</div>}
+        <div ref={scrollRef} />
+      </div>
+
+      <form onSubmit={handleSend} style={s.inputBar}>
+        <input style={s.input} value={input} onChange={e => setInput(e.target.value)} placeholder="CMD > _" autoFocus />
+        <button style={s.sendBtn}>EXECUTE</button>
+      </form>
+    </div>
+  );
+};
+
+const s = {
+  bootContainer: { height: '100vh', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+  bootBox: { width: '450px', padding: '20px', border: '1px solid #1e293b' },
+  bootLog: { color: '#34d399', fontSize: '11px', marginBottom: '8px', letterSpacing: '1px' },
+  loaderBar: { height: '1px', background: '#34d399', animation: 'load 2s linear forwards', marginTop: '10px' },
+  container: { height: '100%', display: 'flex', flexDirection: 'column', background: '#020617', position: 'relative' },
+  header: { padding: '10px 20px', background: '#000', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1e293b', zIndex: 101 },
+  statusText: { fontSize: '9px', color: '#64748b', fontWeight: 'bold' },
+  toggleBtn: { background: 'transparent', border: 'none', fontSize: '9px', cursor: 'pointer', marginLeft: '10px' },
+  dot: { width: '8px', height: '8px', borderRadius: '50%' },
+  chatArea: { flex: 1, overflowY: 'auto', padding: '20px' },
+  bubble: { padding: '12px 16px', borderRadius: '4px', maxWidth: '85%', fontSize: '13px', border: '1px solid rgba(52, 211, 153, 0.1)' },
+  timestamp: { fontSize: '8px', marginTop: '6px', textAlign: 'right' },
+  loader: { color: '#34d399', fontSize: '10px', padding: '10px' },
+  inputBar: { padding: '20px', background: '#000', display: 'flex', gap: '10px', zIndex: 101 },
+  input: { flex: 1, background: '#020617', border: '1px solid #334155', color: '#34d399', padding: '12px', borderRadius: '4px', outline: 'none' },
+  sendBtn: { background: '#34d399', color: '#000', border: 'none', padding: '0 20px', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' },
+  btnIco: { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px' },
+  btnStop: { background: '#ef4444', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '9px' }
+};
+
+export default ChatTerminal;
