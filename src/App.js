@@ -1,217 +1,186 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-// --- AUTHENTICATION ---
-const AuthView = ({ onLogin }) => {
-  const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`http://localhost:5000/api/${mode}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
-      const data = await res.json();
-      if (data.id) onLogin(data); else alert("Access Denied.");
-    } catch (err) { alert("Backend Offline."); }
-  };
-
-  return (
-    <div className="mesh-bg" style={s.authPage}>
-      <div className="glass-panel" style={s.authCard}>
-        <div style={s.brandLogoLarge}>S</div>
-        <h1 style={s.brandTitle}>skillens<span style={{color: '#6366f1'}}>.ai</span></h1>
-        <form onSubmit={handleSubmit} style={s.formStack}>
-          {mode === 'signup' && <input style={s.input} placeholder="Name" onChange={e => setForm({...form, name: e.target.value})} required />}
-          <input style={s.input} placeholder="Email" type="email" onChange={e => setForm({...form, email: e.target.value})} required />
-          <input style={s.input} placeholder="Password" type="password" onChange={e => setForm({...form, password: e.target.value})} required />
-          <button type="submit" className="neon-btn" style={s.btnPrimary}>{mode.toUpperCase()}</button>
-        </form>
-        <p onClick={() => setMode(mode === 'login' ? 'signup' : 'login')} style={s.toggleLink}>
-          {mode === 'login' ? "Request Access →" : "Login to Workspace"}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-// --- MAIN APP ---
 export default function App() {
-  const [view, setView] = useState('auth');
-  const [user, setUser] = useState(null);
+  const [view, setView] = useState('auth'); 
+  const [authMode, setAuthMode] = useState('login');
+  const [user, setUser] = useState({ 
+    name: 'Explorer', email: 'user@skilllens.ai', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=SkillLens' 
+  });
   const [messages, setMessages] = useState([]);
   const [history, setHistory] = useState([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [controller, setController] = useState(null);
   const scrollRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem('skill_user');
-    if (saved) { const u = JSON.parse(saved); setUser(u); setView('home'); loadHistory(u.id); }
+    const savedUser = localStorage.getItem('skill_user');
+    const savedHistory = localStorage.getItem('skill_history');
+    if (savedUser) { setUser(JSON.parse(savedUser)); setView('home'); }
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
   }, []);
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, isTyping]);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, isTyping]);
 
-  const loadHistory = (uid) => fetch(`http://localhost:5000/api/history/${uid}`).then(r => r.json()).then(setHistory);
-
-  const handleAvatarChange = (e) => {
+  const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = () => setUser({ ...user, avatar: reader.result });
+      reader.onloadend = () => setUser({ ...user, avatar: reader.result });
       reader.readAsDataURL(file);
     }
   };
 
   const handleVoice = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert("Speech API not supported.");
-    const recognition = new SpeechRecognition();
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onresult = (e) => setInput(e.results[0][0].transcript);
-    recognition.start();
+    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Speech) return alert("Voice recognition not supported.");
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const rec = new Speech();
+    recognitionRef.current = rec;
+    rec.continuous = false;
+    rec.onstart = () => setIsListening(true);
+    rec.onresult = (e) => {
+      setInput(e.results[0][0].transcript);
+      setIsListening(false);
+    };
+    rec.onerror = () => setIsListening(false);
+    rec.onend = () => setIsListening(false);
+    rec.start();
   };
 
-  const handleSend = async () => {
+  const startNewChat = () => {
+    if (messages.length > 0) {
+      const title = messages[0].text.substring(0, 22) + "...";
+      const newHistory = [{ title, chats: messages }, ...history];
+      setHistory(newHistory.slice(0, 10));
+      localStorage.setItem('skill_history', JSON.stringify(newHistory));
+    }
+    setMessages([]);
+  };
+
+  const handleSend = () => {
     if (!input.trim()) return;
-    const newController = new AbortController();
-    setController(newController);
-    const currentChat = [...messages, { role: 'user', text: input }];
-    setMessages(currentChat); setInput(''); setIsTyping(true);
-
-    try {
-      const res = await fetch('http://localhost:11434/api/generate', {
-        method: 'POST', signal: newController.signal,
-        body: JSON.stringify({ model: 'phi3', prompt: input, stream: false })
-      });
-      const data = await res.json();
-      const finalChat = [...currentChat, { role: 'ai', text: data.response }];
-      setMessages(finalChat);
-      fetch('http://localhost:5000/api/history', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: input.slice(0, 20), messages: finalChat, userId: user.id })
-      }).then(() => loadHistory(user.id));
-    } catch (e) {
-      if (e.name === 'AbortError') setMessages([...currentChat, { role: 'ai', text: "⚠ Operation Terminated." }]);
-    } finally { setIsTyping(false); }
+    const userMsg = { role: 'user', text: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsTyping(true);
+    setTimeout(() => {
+      setMessages(prev => [...prev, { role: 'ai', text: "Intelligence node active. Request processed." }]);
+      setIsTyping(false);
+    }, 1000);
   };
 
-  if (view === 'auth') return <AuthView onLogin={(u) => { setUser(u); setView('home'); localStorage.setItem('skill_user', JSON.stringify(u)); loadHistory(u.id); }} />;
+  if (view === 'auth') return (
+    <div className="mesh-bg" style={s.center}>
+      <div className="glass-panel" style={s.authCard}>
+        <div style={s.logoCircle}>S</div>
+        <h1>SkillLens<span style={{color:'#6366f1'}}>.ai</span></h1>
+        <p style={s.subtitle}>{authMode === 'login' ? 'SECURE LOGIN' : 'CREATE ACCOUNT'}</p>
+        {authMode === 'register' && (
+          <input style={s.input} placeholder="Full Name" onChange={(e) => setUser({...user, name: e.target.value})} />
+        )}
+        <input style={s.input} placeholder="Email" onChange={(e) => setUser({...user, email: e.target.value})} />
+        <input style={s.input} type="password" placeholder="Password" />
+        <button className="neon-btn" style={s.mainBtn} onClick={() => { localStorage.setItem('skill_user', JSON.stringify(user)); setView('home'); }}>
+          {authMode === 'login' ? 'LOGIN' : 'REGISTER'}
+        </button>
+        <p style={s.toggle} onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
+          {authMode === 'login' ? "Need a node? Sign up" : "Have a node? Log in"}
+        </p>
+      </div>
+    </div>
+  );
+
+  if (view === 'profile') return (
+    <div className="mesh-bg" style={s.center}>
+      <div className="glass-panel" style={s.pCard}>
+        <div className="avatar-upload-container" onClick={() => document.getElementById('fileIn').click()}>
+          <img src={user.avatar} className="avatar-main" alt="avatar" />
+          <div className="avatar-overlay">UPLOAD</div>
+        </div>
+        <input id="fileIn" type="file" hidden accept="image/*" onChange={handleFileUpload} />
+        <h2>Profile Settings</h2>
+        <div style={{width:'100%', textAlign:'left'}}>
+          <label style={s.label}>FULL NAME</label>
+          <input style={s.input} value={user.name} onChange={(e) => setUser({...user, name: e.target.value})} />
+          <label style={s.label}>EMAIL</label>
+          <input style={s.input} value={user.email} onChange={(e) => setUser({...user, email: e.target.value})} />
+        </div>
+        <button className="neon-btn" style={s.mainBtn} onClick={() => { localStorage.setItem('skill_user', JSON.stringify(user)); setView('home'); }}>SAVE CHANGES</button>
+        <p style={s.logout} onClick={() => { localStorage.clear(); window.location.reload(); }}>LOGOUT</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div style={s.appContainer}>
-      {/* SIDEBAR */}
-      <aside className="glass-panel" style={s.sideNav}>
-        <div style={s.brandArea}><div style={s.brandLogo}>S</div><span style={s.brandName}>SkillLens<span style={{color:'#6366f1'}}>AI</span></span></div>
-        <button className="neon-btn" style={s.newChatBtn} onClick={() => setMessages([])}>+ NEW ANALYSIS</button>
-        <div style={s.historyList}>
-          <div style={s.listLabel}>HISTORY LOGS</div>
-          {history.map(h => (
-            <div key={h.id} style={s.hCard} onClick={() => setMessages(JSON.parse(h.messages))}># {h.title}</div>
+    <div style={s.app}>
+      <aside className="glass-panel" style={s.side}>
+        <div style={s.logoSmall}>S</div>
+        <button style={s.newBtn} onClick={startNewChat}>+ NEW CHAT</button>
+        <div style={{flex:1, overflowY:'auto'}}>
+          {history.map((h, i) => (
+            <div key={i} className="history-item" onClick={() => setMessages(h.chats)}>{h.title}</div>
           ))}
         </div>
-        <div style={s.userProfile} onClick={() => setView('profile')}>
-          <img src={user?.avatar || 'https://via.placeholder.com/150'} style={s.userAvatar} alt="p" />
-          <div style={s.userInfo}><div style={s.userName}>{user?.name}</div><div style={s.userTier}>PRO MEMBER</div></div>
+        <div style={s.sideProfile} onClick={() => setView('profile')}>
+          <img src={user.avatar} style={s.avSmall} alt="av" />
+          <div style={{overflow:'hidden'}}>
+            <p style={{fontSize:'11px', fontWeight:'800', margin:0}}>{user.name}</p>
+            <p style={{fontSize:'9px', color:'#6366f1', margin:0}}>Online</p>
+          </div>
         </div>
       </aside>
 
-      {/* MAIN WORKSPACE */}
-      <main style={s.workspace}>
-        {view === 'home' ? (
-          <>
-            <header style={s.topBar}>
-              <div style={s.statusIndicator}><div className="pulse-dot"></div> Node: Phi-3 Active</div>
-              <button style={s.ghostBtn} onClick={() => {localStorage.clear(); window.location.reload();}}>LOGOUT</button>
-            </header>
-            <div style={s.chatViewport} ref={scrollRef}>
-              {messages.map((m, i) => (
-                <div key={i} style={m.role === 'user' ? s.uRow : s.aRow}>
-                  <div className={m.role === 'user' ? "user-bubble" : "ai-bubble"} style={s.bubble}>{m.text}</div>
-                </div>
-              ))}
-              {isTyping && <div style={s.typingRow}><div className="pulse-dot"></div><span style={s.typingText}>Analyzing...</span></div>}
-            </div>
-            <div className="glass-panel" style={s.commandDock}>
-              <button onClick={handleVoice} className={isListening ? "pulse-red" : ""} style={{...s.iconBtn, color: isListening ? '#ef4444' : '#6366f1'}}>{isListening ? '●' : '🎤'}</button>
-              <input style={s.dockInput} placeholder="Enter command..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} disabled={isTyping} />
-              {isTyping ? <button onClick={() => controller?.abort()} style={s.stopActionBtn}>STOP ⏹</button> : <button className="neon-btn" style={s.sendIcon} onClick={handleSend}>↑</button>}
-            </div>
-          </>
-        ) : (
-          /* PROFILE HUB */
-          <div style={s.profileCenter}>
-            <div className="glass-panel" style={s.pCard}>
-              <div style={s.avLargeWrap}>
-                <img src={user.avatar || 'https://via.placeholder.com/150'} style={s.avLarge} alt="av" />
-                <label style={s.avEdit}>✎<input type="file" hidden onChange={handleAvatarChange} /></label>
-              </div>
-              <div style={s.profileForm}>
-                <div style={s.inputGroup}><label style={s.fieldLabel}>DISPLAY NAME</label>
-                  <input style={s.input} value={user.name} onChange={(e) => setUser({...user, name: e.target.value})} /></div>
-                <div style={s.inputGroup}><label style={s.fieldLabel}>EMAIL ADDRESS</label>
-                  <input style={s.input} value={user.email} onChange={(e) => setUser({...user, email: e.target.value})} /></div>
-              </div>
-              <button onClick={() => { localStorage.setItem('skill_user', JSON.stringify(user)); setView('home'); }} className="neon-btn" style={s.saveBtn}>SAVE & RETURN</button>
-            </div>
-          </div>
-        )}
+      <main style={s.main}>
+        <div style={s.chat} ref={scrollRef}>
+          {messages.length === 0 && <div style={s.empty}>Ready for commands.</div>}
+          {messages.map((m, i) => (
+            <div key={i} className={m.role === 'user' ? "user-bubble" : "ai-bubble"}>{m.text}</div>
+          ))}
+          {isTyping && <div className="ai-bubble" style={{opacity:0.4}}>...</div>}
+        </div>
+        <div className="glass-panel" style={s.dock}>
+          <button onClick={handleVoice} className={isListening ? "pulse-red" : ""} style={s.micBtn}>🎤</button>
+          <input style={s.dockInput} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Ask SkillLens..." />
+          <button className="neon-btn" style={s.send} onClick={handleSend}>↑</button>
+        </div>
       </main>
     </div>
   );
 }
 
-// --- SYSTEM STYLES ---
 const s = {
-  appContainer: { display: 'flex', height: '100vh', width: '100vw', background: '#080a0f' },
-  authPage: { height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  authCard: { width: '400px', padding: '50px', borderRadius: '30px', textAlign: 'center' },
-  brandLogoLarge: { background: '#6366f1', width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: '#fff', fontWeight: 'bold' },
-  brandTitle: { fontSize: '28px', color: '#fff', marginBottom: '30px', letterSpacing: '-1px' },
-  formStack: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  input: { padding: '15px', borderRadius: '12px', background: 'rgba(0,0,0,0.3)', border: '1px solid #333', color: '#fff', outline: 'none' },
-  btnPrimary: { padding: '15px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', border: 'none' },
-  toggleLink: { color: '#6366f1', marginTop: '20px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' },
-  sideNav: { width: '270px', display: 'flex', flexDirection: 'column', padding: '24px' },
-  brandArea: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '35px' },
-  brandLogo: { background: '#6366f1', width: '30px', height: '30px', borderRadius: '8px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
-  brandName: { fontWeight: '800', fontSize: '18px', color: '#fff' },
-  newChatBtn: { padding: '14px', borderRadius: '12px', fontWeight: 'bold', fontSize: '11px', marginBottom: '25px' },
-  historyList: { flex: 1, overflowY: 'auto' },
-  listLabel: { fontSize: '10px', color: '#475569', fontWeight: '800', marginBottom: '15px' },
-  hCard: { padding: '12px', borderRadius: '10px', fontSize: '13px', color: '#94a3b8', cursor: 'pointer' },
-  userProfile: { marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', cursor: 'pointer' },
-  userAvatar: { width: '38px', height: '38px', borderRadius: '10px', objectFit: 'cover' },
-  userName: { fontSize: '14px', fontWeight: 'bold', color: '#fff' },
-  userTier: { fontSize: '9px', color: '#6366f1', fontWeight: '900' },
-  workspace: { flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' },
-  topBar: { padding: '20px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  statusIndicator: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#94a3b8' },
-  chatViewport: { flex: 1, padding: '20px 20%', overflowY: 'auto' },
-  bubble: { padding: '18px 24px', maxWidth: '85%', fontSize: '15px', lineHeight: '1.6' },
-  uRow: { display: 'flex', justifyContent: 'flex-end', marginBottom: '25px' },
-  aRow: { display: 'flex', justifyContent: 'flex-start', marginBottom: '25px' },
-  typingRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '15px' },
-  typingText: { fontSize: '12px', color: '#6366f1', fontWeight: 'bold' },
-  commandDock: { position: 'absolute', bottom: '35px', left: '20%', right: '20%', padding: '10px 12px 10px 22px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '15px' },
-  dockInput: { flex: 1, background: 'none', border: 'none', outline: 'none', color: '#fff' },
-  sendIcon: { width: '45px', height: '45px', borderRadius: '14px', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' },
-  stopActionBtn: { background: '#ef4444', color: '#fff', border: 'none', borderRadius: '12px', padding: '12px 18px', fontSize: '11px', fontWeight: '900', cursor: 'pointer' },
-  iconBtn: { background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer' },
-  ghostBtn: { background: 'none', border: 'none', color: '#475569', fontSize: '11px', fontWeight: '800', cursor: 'pointer' },
-  profileCenter: { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  pCard: { width: '400px', padding: '50px', textAlign: 'center', borderRadius: '40px' },
-  avLargeWrap: { position: 'relative', width: '120px', margin: '0 auto' },
-  avLarge: { width: '120px', height: '120px', borderRadius: '30px', border: '4px solid #6366f1', objectFit: 'cover' },
-  avEdit: { position: 'absolute', bottom: '5px', right: '5px', background: '#6366f1', color: '#fff', width: '32px', height: '32px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '3px solid #080a0f' },
-  profileForm: { display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '30px', textAlign: 'left' },
-  inputGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  fieldLabel: { fontSize: '10px', fontWeight: '800', color: '#6366f1', letterSpacing: '1px' },
-  saveBtn: { width: '100%', marginTop: '30px', padding: '15px', borderRadius: '15px', fontWeight: '800' }
+  app: { display: 'flex', height: '100vh', background:'#05070a' },
+  center: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width:'100%' },
+  authCard: { width: '360px', padding: '50px', borderRadius: '35px', textAlign: 'center' },
+  logoCircle: { background:'#6366f1', width:'60px', height:'60px', borderRadius:'50%', margin:'0 auto 20px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'24px', fontWeight:'900' },
+  subtitle: { fontSize:'9px', fontWeight:'800', color:'#475569', marginBottom:'30px', letterSpacing:'1.5px' },
+  input: { width: '100%', padding: '15px', borderRadius: '12px', background: 'rgba(0,0,0,0.4)', border: '1px solid #1e293b', color: '#fff', marginBottom: '18px', outline:'none' },
+  mainBtn: { width:'100%', padding:'16px', marginTop:'10px' },
+  toggle: { fontSize:'11px', color:'#6366f1', marginTop:'20px', cursor:'pointer', fontWeight:'600' },
+  side: { width: '250px', display: 'flex', flexDirection: 'column', padding: '20px' },
+  logoSmall: { background:'#6366f1', width:'35px', height:'35px', borderRadius:'10px', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'900', marginBottom:'30px' },
+  newBtn: { width:'100%', padding:'12px', border:'1px dashed #334155', background:'none', color:'#fff', borderRadius:'10px', fontSize:'11px', fontWeight:'800', cursor:'pointer', marginBottom:'20px' },
+  sideProfile: { display:'flex', alignItems:'center', gap:'12px', padding:'15px 5px', borderTop:'1px solid #1e293b', cursor:'pointer', marginTop:'10px' },
+  avSmall: { width:'35px', height:'35px', borderRadius:'10px', objectFit:'cover', background:'#0f172a' },
+  main: { flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' },
+  chat: { flex: 1, padding: '40px 18%', overflowY: 'auto', display:'flex', flexDirection:'column' },
+  empty: { margin:'auto', color:'#1e293b', fontWeight:'900', fontSize:'12px', letterSpacing:'2px' },
+  dock: { position: 'absolute', bottom: '35px', left: '18%', right: '18%', padding: '12px 25px', borderRadius: '25px', display: 'flex', alignItems: 'center', gap: '15px' },
+  micBtn: { background:'none', border:'none', color:'#6366f1', fontSize:'22px', cursor:'pointer' },
+  dockInput: { flex: 1, background: 'none', border: 'none', color: '#fff', outline: 'none', fontSize: '15px' },
+  send: { width: '45px', height: '45px' },
+  pCard: { width: '400px', padding: '50px', borderRadius: '40px', textAlign: 'center' },
+  label: { fontSize:'9px', color:'#475569', fontWeight:'900', marginBottom:'8px', display:'block' },
+  logout: { color:'#ef4444', fontSize:'11px', marginTop:'25px', cursor:'pointer', fontWeight:'800', opacity:0.6 }
 };

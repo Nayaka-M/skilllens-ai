@@ -1,81 +1,63 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-* { 
-  font-family: 'Plus Jakarta Sans', sans-serif; 
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
-  box-sizing: border-box; 
-}
+* { font-family: 'Plus Jakarta Sans', sans-serif; transition: all 0.25s ease; box-sizing: border-box; }
+body { margin: 0; background: #05070a; color: #f1f5f9; overflow: hidden; }
 
-body { 
-  margin: 0; 
-  background: #080a0f; 
-  color: #f1f5f9; 
-  overflow: hidden; 
-}
-
+/* Obsidian Glass Panels */
 .glass-panel {
-  background: rgba(17, 24, 39, 0.6);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(15, 20, 28, 0.85);
+  backdrop-filter: blur(25px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
 }
 
 .mesh-bg {
-  background-color: #080a0f;
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-    radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-    radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+  background: radial-gradient(at 0% 0%, #111827 0, transparent 55%), 
+              radial-gradient(at 100% 0%, #1e1b4b 0, transparent 55%);
+  height: 100vh; width: 100vw;
 }
+
+/* Chat Bubbles */
+.ai-bubble { 
+  background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.05); 
+  border-radius: 20px 20px 20px 5px; padding: 16px; margin-bottom: 20px; align-self: flex-start; max-width: 80%;
+}
+.user-bubble { 
+  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); 
+  border-radius: 20px 20px 5px 20px; padding: 16px; margin-bottom: 20px; align-self: flex-end; max-width: 80%;
+}
+
+/* History Items */
+.history-item {
+  padding: 12px; margin: 5px 0; border-radius: 10px; cursor: pointer;
+  font-size: 12px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.history-item:hover { background: rgba(99, 102, 241, 0.1); color: #fff; }
+
+/* Avatar System */
+.avatar-upload-container {
+  position: relative; width: 120px; height: 120px; margin: 0 auto 25px; cursor: pointer;
+}
+.avatar-main {
+  width: 100%; height: 100%; border-radius: 35px; border: 3px solid #6366f1;
+  object-fit: cover; background: #0f172a; padding: 4px;
+}
+.avatar-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5); border-radius: 35px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 900; opacity: 0; transition: 0.3s;
+}
+.avatar-upload-container:hover .avatar-overlay { opacity: 1; }
+
+/* Voice Pulse */
+.pulse-red { animation: mic-pulse 1.5s infinite; color: #ef4444 !important; }
+@keyframes mic-pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
 .neon-btn {
   background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-  border: none;
-  color: white;
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+  border: none; color: white; cursor: pointer; font-weight: 800; border-radius: 14px;
 }
 
-.neon-btn:hover {
-  filter: brightness(1.2);
-  transform: translateY(-2px);
-  box-shadow: 0 0 25px rgba(99, 102, 241, 0.5);
-}
-
-.ai-bubble {
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px 20px 20px 4px;
-}
-
-.user-bubble {
-  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-  border-radius: 20px 20px 4px 20px;
-}
-
-.pulse-red {
-  animation: mic-pulse 1.5s infinite;
-  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
-}
-
-@keyframes mic-pulse {
-  0% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.1); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-.pulse-dot {
-  width: 8px; height: 8px;
-  background: #22c55e;
-  border-radius: 50%;
-  animation: pulse-green 2s infinite;
-}
-
-@keyframes pulse-green {
-  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-}
-
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.2); border-radius: 10px; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
