@@ -1,126 +1,118 @@
 import React, { useState, useEffect } from 'react';
 import ChatTerminal from './ChatTerminal';
+import WelcomeHome from './WelcomeHome';
 
 const SkillLensDashboard = ({ user, token, onUpdateUser, onLogout }) => {
-  const [hasStarted, setHasStarted] = useState(false);
-  const [view, setView] = useState('terminal'); 
-  const [profileTab, setProfileTab] = useState('name');
-  const [history, setHistory] = useState([]);
-  const [viewingTranscript, setViewingTranscript] = useState(null);
+  // --- STATE ---
+  const [view, setView] = useState('home'); 
+  const [selectedSkill, setSelectedSkill] = useState('General Help'); // Fixed ReferenceError
+  const [history, setHistory] = useState([]); // Default to empty array
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({ name: user?.name, email: user?.email });
 
-  // CRITICAL: This state holds your current chat so it doesn't disappear
-  const [activeChat, setActiveChat] = useState([]);
+  const skills = [
+    { id: 'general', name: 'General Help', icon: '💡' },
+    { id: 'farming', name: 'Smart Farming', icon: '🌾' },
+    { id: 'electric', name: 'Electrical Work', icon: '⚡' },
+    { id: 'mobile', name: 'Mobile Repair', icon: '📱' },
+  ];
 
+  // --- FETCH HISTORY ---
   useEffect(() => {
-    if (view === 'profile' && profileTab === 'history' && token) {
+    if (token) {
       fetch('http://localhost:5000/api/history', { 
         headers: { 'Authorization': `Bearer ${token}` } 
       })
       .then(res => res.json())
-      .then(data => { if (Array.isArray(data)) setHistory(data); })
-      .catch(err => console.error("Load Error:", err));
+      .then(data => setHistory(Array.isArray(data) ? data : [])) // Ensure it's an array
+      .catch(err => setHistory([]));
     }
-  }, [profileTab, view, token]);
+  }, [token, view]);
 
-  if (!hasStarted) {
-    return (
-      <div style={s.splash}>
-        <h1 style={{ color: '#10a37f', fontSize: '48px', margin: 0 }}>SkillLens-AI</h1>
-        <button onClick={() => setHasStarted(true)} style={s.startBtn}>Get Started</button>
-      </div>
-    );
-  }
+  const handleProfileUpdate = async (e) => {
+    e.preventDefault();
+    const res = await fetch('http://localhost:5000/api/user/update', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(editData)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      onUpdateUser(data.user);
+      setIsEditing(false);
+      alert("Profile updated!");
+    }
+  };
 
   return (
     <div style={s.wrapper}>
       <nav style={s.nav}>
         <div style={{ fontWeight: 'bold', color: '#10a37f', fontSize: '20px' }}>SkillLens-AI</div>
-        <div style={{ display: 'flex', gap: '30px' }}>
-          <span onClick={() => setView('terminal')} style={view === 'terminal' ? s.act : s.lnk}>Dashboard</span>
-          <span onClick={() => setView('profile')} style={view === 'profile' ? s.act : s.lnk}>Profile</span>
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          <div style={s.xpBadge}>LVL {user?.level || 1} | {user?.xp || 0} XP</div>
+          <button onClick={onLogout} style={s.logout}>Logout</button>
         </div>
-        <button onClick={onLogout} style={s.logout}>Logout</button>
       </nav>
 
-      <main style={{ flex: 1, overflowY: 'auto' }}>
-        {view === 'terminal' ? (
-          <ChatTerminal 
-            user={user} 
-            token={token} 
-            messages={activeChat} 
-            setMessages={setActiveChat} 
-            onUpdateUser={onUpdateUser} 
-          />
-        ) : (
-          <div style={s.profileContainer}>
-            <div style={s.tabs}>
-              <span onClick={() => {setProfileTab('name'); setViewingTranscript(null);}} style={profileTab === 'name' ? s.tabA : s.tab}>Account</span>
-              <span onClick={() => setProfileTab('history')} style={profileTab === 'history' ? s.tabA : s.tab}>History</span>
+      <div style={s.body}>
+        <aside style={s.sidebar}>
+          <div onClick={() => setView('home')} style={view === 'home' ? s.skillBtnActive : s.skillBtn}>🏠 Home</div>
+          <hr style={s.divider} />
+          <label style={s.label}>SKILL TRACKS</label>
+          {skills.map(skill => (
+            <div key={skill.id} 
+              onClick={() => { setSelectedSkill(skill.name); setView('terminal'); }}
+              style={(view === 'terminal' && selectedSkill === skill.name) ? s.skillBtnActive : s.skillBtn}>
+              {skill.icon} {skill.name}
             </div>
+          ))}
+          <hr style={s.divider} />
+          <div onClick={() => setView('profile')} style={view === 'profile' ? s.skillBtnActive : s.skillBtn}>👤 Profile</div>
+        </aside>
 
-            <div style={{ marginTop: '30px' }}>
-              {profileTab === 'name' ? (
-                <div>
-                  <label style={s.label}>OPERATOR_NAME</label>
-                  <h3 style={s.val}>{user?.name}</h3>
-                  <label style={s.label}>EMAIL_UPLINK</label>
-                  <h3 style={s.val}>{user?.email}</h3>
-                </div>
-              ) : (
-                <div>
-                  {viewingTranscript ? (
-                    <div>
-                      <button onClick={() => setViewingTranscript(null)} style={s.backBtn}>← Back to List</button>
-                      <div style={s.transcriptBox}>
-                        {(() => {
-                          try {
-                            const msgs = typeof viewingTranscript.transcript === 'string' 
-                              ? JSON.parse(viewingTranscript.transcript) : viewingTranscript.transcript;
-                            return msgs.map((m, i) => (
-                              <div key={i} style={{ marginBottom: '15px' }}>
-                                <b style={{ color: m.role === 'ai' ? '#10a37f' : '#333' }}>{m.role === 'ai' ? 'AI: ' : 'YOU: '}</b>
-                                <span style={{ color: '#333' }}>{m.content}</span>
-                              </div>
-                            ));
-                          } catch (e) { return <span>Error loading transcript.</span>; }
-                        })()}
-                      </div>
-                    </div>
-                  ) : (
-                    history.map(h => (
-                      <div key={h.id} style={s.card} onClick={() => setViewingTranscript(h)}>
-                        <div style={{ color: '#333', fontWeight: 'bold' }}>{h.session_name}</div>
-                        <div style={{ fontSize: '11px', color: '#999' }}>{new Date(h.created_at).toLocaleDateString()}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
+        <main style={s.content}>
+          {view === 'home' && (
+            <WelcomeHome 
+              user={user} 
+              history={history || []} 
+              onStartLearning={() => setView('terminal')} 
+            />
+          )}
+          
+          {view === 'terminal' && (
+            <ChatTerminal user={user} token={token} currentSkill={selectedSkill} />
+          )}
+
+          {view === 'profile' && (
+            <div style={{padding: '40px'}}>
+              <h2>Profile Settings</h2>
+              <div style={s.card}>
+                <label>Name</label>
+                <input style={s.input} defaultValue={user?.name} onChange={e => setEditData({...editData, name: e.target.value})} />
+                <button onClick={handleProfileUpdate} style={s.btn}>Update</button>
+              </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
     </div>
   );
 };
 
 const s = {
-  splash: { height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: '#fff' },
-  startBtn: { background: '#10a37f', color: '#fff', padding: '12px 35px', borderRadius: '30px', border: 'none', cursor: 'pointer', fontWeight: 'bold' },
-  wrapper: { height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' },
-  nav: { display: 'flex', justifyContent: 'space-between', padding: '0 40px', height: '65px', alignItems: 'center', borderBottom: '1px solid #eee' },
-  lnk: { cursor: 'pointer', color: '#666', fontSize: '14px' },
-  act: { cursor: 'pointer', color: '#10a37f', fontWeight: 'bold', fontSize: '14px' },
-  logout: { background: 'none', border: '1px solid #ddd', padding: '5px 12px', borderRadius: '6px', cursor: 'pointer' },
-  profileContainer: { padding: '40px 20%' },
-  tabs: { display: 'flex', gap: '30px', borderBottom: '1px solid #eee' },
-  tab: { cursor: 'pointer', paddingBottom: '12px', color: '#888' },
-  tabA: { cursor: 'pointer', paddingBottom: '12px', color: '#10a37f', borderBottom: '2px solid #10a37f', fontWeight: 'bold' },
-  label: { fontSize: '10px', color: '#aaa', letterSpacing: '1px', display: 'block' },
-  val: { color: '#333', marginBottom: '20px' },
-  card: { padding: '15px', border: '1px solid #eee', borderRadius: '10px', cursor: 'pointer', marginBottom: '10px' },
-  transcriptBox: { background: '#f9f9f9', padding: '20px', borderRadius: '10px', border: '1px solid #eee' },
-  backBtn: { background: 'none', border: 'none', color: '#10a37f', cursor: 'pointer', marginBottom: '10px', fontWeight: 'bold' }
+  wrapper: { height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'Arial' },
+  nav: { height: '60px', display: 'flex', justifyContent: 'space-between', padding: '0 30px', alignItems: 'center', borderBottom: '1px solid #eee' },
+  body: { flex: 1, display: 'flex', overflow: 'hidden' },
+  sidebar: { width: '240px', background: '#f9f9f9', borderRight: '1px solid #eee', padding: '20px' },
+  content: { flex: 1, overflowY: 'auto' },
+  label: { fontSize: '10px', color: '#999', fontWeight: 'bold', marginBottom: '10px', display: 'block' },
+  skillBtn: { padding: '12px', cursor: 'pointer', borderRadius: '8px', marginBottom: '5px' },
+  skillBtnActive: { padding: '12px', cursor: 'pointer', borderRadius: '8px', marginBottom: '5px', background: '#e6f4f1', color: '#10a37f', fontWeight: 'bold' },
+  xpBadge: { background: '#10a37f', color: '#fff', padding: '5px 15px', borderRadius: '20px', fontSize: '12px' },
+  divider: { border: 'none', borderTop: '1px solid #eee', margin: '15px 0' },
+  input: { width: '100%', padding: '10px', margin: '10px 0', borderRadius: '5px', border: '1px solid #ddd' },
+  btn: { background: '#10a37f', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '5px', cursor: 'pointer' },
+  logout: { background: 'none', border: '1px solid #ddd', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }
 };
 
 export default SkillLensDashboard;

@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App'; // This looks for 'export default App'
+import App from './App'; // This looks for the "export default App" we just added
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
