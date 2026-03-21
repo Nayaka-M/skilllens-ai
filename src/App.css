@@ -7,32 +7,25 @@ body { margin: 0; background: #05070a; color: #f1f5f9; overflow: hidden; }
   background: rgba(15, 20, 28, 0.85);
   backdrop-filter: blur(25px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
 }
 
 .mesh-bg {
   background: radial-gradient(at 0% 0%, #111827 0, transparent 55%), 
-              radial-gradient(at 100% 0%, #1e1b4b 0, transparent 55%);
+              radial-gradient(at 100% 0%, #064e3b 0, transparent 55%);
   height: 100vh; width: 100vw;
 }
 
 .ai-bubble { 
-  background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.05); 
-  border-radius: 20px 20px 20px 5px; padding: 16px; margin-bottom: 20px; align-self: flex-start; max-width: 80%;
+  background: rgba(30, 41, 59, 0.5); border-radius: 20px 20px 20px 5px; 
+  padding: 16px; margin-bottom: 20px; align-self: flex-start; max-width: 85%;
 }
 
 .user-bubble { 
-  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); 
-  border-radius: 20px 20px 5px 20px; padding: 16px; margin-bottom: 20px; align-self: flex-end; max-width: 80%;
-}
-
-.auth-input {
-  width: 100%; padding: 14px; border-radius: 10px; 
-  background: rgba(0, 0, 0, 0.3); border: 1px solid #1e293b; 
-  color: #fff; margin-bottom: 15px; outline: none;
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%); 
+  border-radius: 20px 20px 5px 20px; padding: 16px; margin-bottom: 20px; align-self: flex-end; max-width: 85%;
 }
 
 .neon-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-  border: none; color: white; cursor: pointer; font-weight: 800; border-radius: 12px; padding: 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none; color: white; cursor: pointer; font-weight: 800; border-radius: 12px;
 }
