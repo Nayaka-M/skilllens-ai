@@ -1,74 +1,66 @@
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
-const { open } = require('sqlite');
-const sqlite3 = require('sqlite3');
+const { Pool } = require('pg');
+require('dotenv').config();
 
 const app = express();
-app.use(cors());
-app.use(bodyParser.json({ limit: '50mb' })); // Allows for profile picture strings
 
-let db;
+// 1. CORS - This allows your Netlify frontend to talk to this server
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "*", 
+  methods: ["GET", "POST"],
+  credentials: true
+}));
 
-(async () => {
-    // Initialize SQLite Database
-    db = await open({
-        filename: './skillens.db',
-        driver: sqlite3.Database
-    });
+app.use(express.json({ limit: '50mb' }));
 
-    // Create Tables
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            email TEXT UNIQUE,
-            password TEXT,
-            avatar TEXT
-        );
-        CREATE TABLE IF NOT EXISTS history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userId INTEGER,
-            title TEXT,
-            messages TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-    `);
-})();
-
-// --- AUTH ENDPOINTS ---
-app.post('/api/signup', async (req, res) => {
-    const { name, email, password } = req.body;
-    try {
-        const result = await db.run(
-            'INSERT INTO users (name, email, password, avatar) VALUES (?, ?, ?, ?)',
-            [name, email, password, 'https://via.placeholder.com/150']
-        );
-        res.json({ id: result.lastID, name, email, avatar: 'https://via.placeholder.com/150' });
-    } catch (e) { res.status(400).json({ error: "Email already exists" }); }
+// 2. DATABASE CONNECTION
+// We use your specific URL. On Render, it's best to put this in an Env Var named DATABASE_URL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || "postgresql://skilllens_db_a1h5_user:y3yfPnFhWYx2jKbgujDawBYboNu5Mskg@dpg-d71bgoq4d50c73bjmrhg-a.oregon-postgres.render.com/skilllens_db_a1h5",
+  ssl: {
+    rejectUnauthorized: false // This is mandatory for connecting to Render Postgres
+  }
 });
 
+// 3. API ROUTES
+app.get('/', (req, res) => res.send("SkillLens API is active 🚀"));
+
+// Login logic
 app.post('/api/login', async (req, res) => {
-    const { email, password } = req.body;
-    const user = await db.get('SELECT * FROM users WHERE email = ? AND password = ?', [email, password]);
-    if (user) res.json(user);
-    else res.status(401).json({ error: "Invalid Credentials" });
-});
-
-// --- HISTORY ENDPOINTS ---
-app.post('/api/history', async (req, res) => {
-    const { userId, title, messages } = req.body;
-    await db.run(
-        'INSERT INTO history (userId, title, messages) VALUES (?, ?, ?)',
-        [userId, title, JSON.stringify(messages)]
+  const { username, password } = req.body;
+  try {
+    const result = await pool.query(
+      'SELECT * FROM users WHERE username = $1 AND password = $2', 
+      [username, password]
     );
-    res.json({ success: true });
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
+    } else {
+      res.status(401).json({ error: "Invalid credentials" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-app.get('/api/history/:userId', async (req, res) => {
-    const rows = await db.all('SELECT * FROM history WHERE userId = ? ORDER BY timestamp DESC', [req.params.userId]);
-    res.json(rows);
+// Update Profile logic
+app.post('/api/user/update', async (req, res) => {
+  const { id, username, email, profile_pic, mobile, dob, chat_history, chat_count } = req.body;
+  try {
+    const updated = await pool.query(
+      `UPDATE users SET username=$1, email=$2, profile_pic=$3, mobile=$4, dob=$5, chat_history=$6, chat_count=$7 
+       WHERE id=$8 RETURNING *`,
+      [username, email, profile_pic, mobile, dob, JSON.stringify(chat_history || []), chat_count, id]
+    );
+    res.json(updated.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Update failed" });
+  }
 });
 
-// Start Server
-app.listen(5000, () => console.log('🚀 SkillLens Backend running on http://localhost:5000'));
+// 4. PORT - Render assigns a port automatically
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
