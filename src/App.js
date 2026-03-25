@@ -3,6 +3,8 @@ import { jsPDF } from "jspdf";
 
 // REPLACE THIS with your key or use process.env.REACT_APP_GROQ_API
 const GROQ_API_KEY = process.env.REACT_APP_GROQ_API;
+// Change this:
+
 
 const themes = {
   purple: { bg: '#F3F4F9', accent: '#8B5CF6', text: '#1F2937', surface: '#FFFFFF', glass: 'rgba(139, 92, 246, 0.1)', border: '#E5E7EB' },
