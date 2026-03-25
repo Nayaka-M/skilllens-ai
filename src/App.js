@@ -14,7 +14,7 @@ const themes = {
 export default function SkillLens() {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('sl_user')) || null);
   const [view, setView] = useState('dashboard');
-  const [theme, setTheme] = useState(user?.theme_color || 'purple');
+  const [theme] = useState(user?.theme_color || 'purple');
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
 
