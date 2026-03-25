@@ -91,7 +91,7 @@ export default function SkillLens() {
     try {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${GROQ_API}`, "Content-Type": "application/json" },
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ 
           model: "llama-3.3-70b-versatile", 
           messages: newMsgs.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text })) 
