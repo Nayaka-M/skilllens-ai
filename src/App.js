@@ -31,7 +31,7 @@ export default function SkillLens() {
     setUser(updatedUser);
     localStorage.setItem('sl_user', JSON.stringify(updatedUser));
     try {
-      const res = await fetch("http://localhost:5000/api/user/update", {
+      const res = await fetch("https://skilllens-ai-2.onrender.com/api/user/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedUser)
@@ -211,7 +211,7 @@ function AuthScreen({ setUser, ui }) {
   const handleAuth = async () => {
     const path = isLogin ? "/api/login" : "/api/register";
     try {
-      const res = await fetch(`http://localhost:5000${path}`, {
+      const res = await fetch(`https://skilllens-ai-2.onrender.com${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form)
