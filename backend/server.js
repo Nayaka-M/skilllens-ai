@@ -1,79 +1,96 @@
-const express = require("express");
-const cors = require("cors");
-const { Pool } = require("pg");
-const bcrypt = require("bcryptjs");
-require("dotenv").config();
+require('dotenv').config();
+const express = require('express');
+const { Pool } = require('pg');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-// --- 🔓 CORS CONFIGURATION ---
-// This allows your specific Vercel URL to access the API
+// 1. Middleware Configuration
+app.use(express.json());
 app.use(cors({
-  origin: ["http://localhost:3000", "https://skilllens-frontend-final.vercel.app"], // Add your new Vercel URL here
+  origin: ["http://localhost:3000", "https://skilllens-ui-v2.vercel.app"], // Add your Vercel URL here
   methods: ["GET", "POST"],
   credentials: true
 }));
 
-app.use(express.json());
-
-// --- 🗄️ DATABASE CONNECTION ---
+// 2. Database Connection (Neon Postgres)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, 
+  ssl: {
+    rejectUnauthorized: false // Required for Neon/Render SSL connections
+  },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 });
 
-// Test Database Connection on Startup
-pool.connect((err) => {
-  if (err) console.error("❌ Database Connection Error:", err.stack);
-  else console.log("✅ Connected to Neon Postgres");
+// 🔥 CRITICAL: Prevent the "Unhandled error event" crash
+pool.on('error', (err) => {
+  console.error('❌ Unexpected error on idle database client:', err.message);
 });
 
-// --- 🔑 AUTH ROUTES ---
+// Test the connection on startup
+pool.connect((err, client, release) => {
+  if (err) {
+    return console.error('❌ Error acquiring client', err.stack);
+  }
+  console.log('✅ Connected to Neon Postgres');
+  release();
+});
 
-// Registration
-app.post("/api/register", async (req, res) => {
+// 3. API Routes
+
+// Registration Route
+app.post('/register', async (req, res) => {
   const { username, email, password } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      "INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email",
+      'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username',
       [username, email, hashedPassword]
     );
-    res.json(result.rows[0]);
+    console.log(`👤 User Registered: ${username}`);
+    res.status(201).json({ message: "User registered successfully", user: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: "User already exists or DB error" });
-  }
-});
-
-// Login
-app.post("/api/login", async (req, res) => {
-  const { username, password } = req.body; 
-  try {
-    const result = await pool.query(
-      "SELECT * FROM users WHERE username=$1 OR email=$1",
-      [username]
-    );
-
-    if (result.rows.length > 0) {
-      const user = result.rows[0];
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (isMatch) {
-        delete user.password;
-        res.json(user);
-      } else {
-        res.status(401).json({ error: "Incorrect password" });
-      }
-    } else {
-      res.status(404).json({ error: "User not found" });
+    console.error("Reg Error:", err.message);
+    if (err.code === '23505') {
+      return res.status(400).json({ error: "User or Email already exists" });
     }
-  } catch (err) {
-    res.status(500).json({ error: "Server Error" });
+    res.status(500).json({ error: "Database error" });
   }
 });
 
-app.get("/", (req, res) => res.send("SkillLens API is LIVE 🚀"));
+// Login Route
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: "User not found" });
+    }
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server is running on port ${PORT}`);
+    const user = result.rows[0];
+    const isMatch = await bcrypt.compare(password, user.password);
+    
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    res.json({ message: "Login successful", username: user.username });
+  } catch (err) {
+    console.error("Login Error:", err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Health Check Route
+app.get('/', (req, res) => {
+  res.send('SkillLens Backend is Live 🚀');
+});
+
+// 4. Start Server
+app.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
 });
