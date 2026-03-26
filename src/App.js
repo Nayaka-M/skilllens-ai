@@ -1,317 +1,145 @@
 import React, { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown'; // npm install react-markdown remark-gfm
-import remarkGfm from 'remark-gfm';
 
-const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY; // Better naming
+// CONFIGURATION - CHANGE THIS TO YOUR VERCEL KEY
+const GROQ_API_KEY = process.env.REACT_APP_GROQ_API || "YOUR_GROQ_KEY_HERE";
 const API_URL = "https://skilllens-ai-1.onrender.com";
 
-export default function SkillLens() {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('sl_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+const themes = {
+  purple: { 
+    bg: '#F3F4F9', 
+    accent: '#8B5CF6', 
+    text: '#1F2937', 
+    surface: '#FFFFFF', 
+    glass: 'rgba(139, 92, 246, 0.1)', 
+    border: '#E5E7EB',
+    shadow: '0 10px 30px rgba(0,0,0,0.05)'
+  }
+};
 
-  const [view] = useState('terminal'); // You can expand later
+export default function SkillLens() {
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('sl_user')) || null);
+  const [view, setView] = useState('terminal');
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
+  const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
-  const inputRef = useRef(null);
+  const ui = themes.purple;
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(() => { 
+    scrollRef.current?.scrollIntoView({ behavior: 'smooth' }); 
   }, [messages]);
 
-  // Auto-focus input
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  if (!user) {
-    return <AuthScreen setUser={setUser} />;
-  }
-
-  if (!GROQ_API_KEY) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center', color: 'red' }}>
-        <h2>Error: GROQ API Key Missing</h2>
-        <p>Please set <code>REACT_APP_GROQ_API_KEY</code> in your .env file and restart the app.</p>
-      </div>
-    );
-  }
+  if (!user) return <AuthScreen setUser={setUser} ui={ui} />;
 
   const sendMessage = async () => {
-    const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
-
-    const userMessage = { role: 'user', text: trimmed };
-    setMessages((prev) => [...prev, userMessage]);
+    if (!input.trim() || loading) return;
+    const userQ = input;
+    setMessages(prev => [...prev, { role: 'user', text: userQ }]);
     setInput('');
-    setIsLoading(true);
+    setLoading(true);
 
     try {
-      // Send full conversation history for better context
-      const history = messages.map((m) => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.text,
-      }));
-
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [...history, { role: "user", content: trimmed }],
-          temperature: 0.7,
-          max_tokens: 1024,
-        }),
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          model: "llama-3.3-70b-versatile", 
+          messages: [{ role: "user", content: userQ }] 
+        })
       });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
       const data = await res.json();
-      const aiText = data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.";
+      const aiResponse = data.choices[0].message.content;
+      setMessages(prev => [...prev, { role: 'ai', text: aiResponse }]);
 
-      setMessages((prev) => [...prev, { role: 'ai', text: aiText }]);
-    } catch (e) {
-      console.error(e);
-      const errorMsg = e.message.includes("401") 
-        ? "Invalid Groq API key. Please check your key."
-        : "AI service error. Please try again later.";
-      setMessages((prev) => [...prev, { role: 'ai', text: `❌ ${errorMsg}` }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div style={{ 
-      height: '100vh', 
-      background: '#F3F4F9', 
-      padding: '20px', 
-      fontFamily: 'Inter, system-ui, sans-serif',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <nav style={{ 
-        marginBottom: '20px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '10px'
-      }}>
-        <h1 style={{ margin: 0, color: '#8B5CF6' }}>SkillLens</h1>
-        <span>Logged in as: <b>{user.username}</b></span>
-        <button 
-          onClick={() => { 
-            localStorage.clear(); 
-            window.location.reload(); 
-          }} 
-          style={{ color: 'red', background: 'none', border: 'none', cursor: 'pointer' }}
-        >
-          Logout
-        </button>
-      </nav>
-
-      <main style={{ 
-        flex: 1, 
-        background: '#fff', 
-        borderRadius: '20px', 
-        padding: '20px', 
-        overflowY: 'auto', 
-        border: '1px solid #ddd',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.05)'
-      }}>
-        {messages.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#666' }}>
-            <h3>Welcome to SkillLens Terminal</h3>
-            <p>Ask anything about skills, career, resume, learning paths, or interviews!</p>
-          </div>
-        )}
-
-        {messages.map((m, i) => (
-          <div 
-            key={i} 
-            style={{ 
-              marginBottom: '20px', 
-              padding: '14px 18px', 
-              background: m.role === 'ai' ? '#f0f0ff' : '#f8f8f8', 
-              borderRadius: '12px',
-              borderLeft: m.role === 'ai' ? '4px solid #8B5CF6' : '4px solid #666'
-            }}
-          >
-            <small style={{ fontWeight: 'bold', color: m.role === 'ai' ? '#8B5CF6' : '#555' }}>
-              {m.role.toUpperCase()}
-            </small>
-            <div style={{ marginTop: '6px', lineHeight: 1.6 }}>
-              {m.role === 'ai' ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
-              ) : (
-                <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{m.text}</p>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {isLoading && (
-          <div style={{ padding: '10px', color: '#888', fontStyle: 'italic' }}>
-            SkillLens is thinking...
-          </div>
-        )}
-
-        <div ref={scrollRef} />
-      </main>
-
-      <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-          placeholder="Ask SkillLens anything... (skills, career advice, interview prep...)"
-          disabled={isLoading}
-          style={{ 
-            flex: 1, 
-            padding: '15px', 
-            borderRadius: '10px', 
-            border: '1px solid #ccc',
-            fontSize: '16px'
-          }}
-        />
-        <button 
-          onClick={sendMessage} 
-          disabled={isLoading || !input.trim()}
-          style={{ 
-            background: isLoading ? '#ccc' : '#8B5CF6', 
-            color: '#fff', 
-            padding: '0 32px', 
-            borderRadius: '10px', 
-            border: 'none', 
-            cursor: isLoading ? 'not-allowed' : 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          {isLoading ? '...' : 'SEND'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// AuthScreen remains mostly the same (minor improvements)
-function AuthScreen({ setUser }) {
-  const [isLogin, setIsLogin] = useState(true);
-  const [form, setForm] = useState({ username: '', password: '', email: '' });
-  const [loading, setLoading] = useState(false);
-
-  const handleAuth = async () => {
-    if (!form.username || !form.password || (!isLogin && !form.email)) {
-      alert("Please fill all required fields");
-      return;
-    }
-
-    setLoading(true);
-    const path = isLogin ? "/api/login" : "/api/register";
-
-    try {
-      const res = await fetch(`${API_URL}${path}`, {
+      // Sync count to DB
+      await fetch(`${API_URL}/api/user/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...user, chat_count: (user.chat_count || 0) + 1 })
       });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        localStorage.setItem('sl_user', JSON.stringify(data));
-        setUser(data);
-      } else {
-        alert(data.error || "Authentication failed");
-      }
     } catch (e) {
-      alert("Server is offline or network error. Check Render logs.");
+      alert("AI Processing Failed. Check Groq Key.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ 
-      height: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      background: '#e5e7eb' 
-    }}>
-      <div style={{ 
-        background: '#fff', 
-        padding: '40px', 
-        borderRadius: '20px', 
-        width: '360px', 
-        boxShadow: '0 10px 30px rgba(0,0,0,0.1)' 
-      }}>
-        <h2 style={{ textAlign: 'center', color: '#8B5CF6', marginBottom: '30px' }}>
-          {isLogin ? 'Login to SkillLens' : 'Create Account'}
-        </h2>
+    <div style={{ height: '100vh', background: ui.bg, color: ui.text, display: 'flex', flexDirection: 'column', padding: '20px', fontFamily: 'Segoe UI, sans-serif' }}>
+      <nav style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', background: ui.surface, padding: '15px 25px', borderRadius: '20px', boxShadow: ui.shadow }}>
+        <h2 style={{ color: ui.accent, margin: 0, fontWeight: '900' }}>SKILLLENS AI</h2>
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+            <span style={{ fontWeight: '600' }}>{user.username}</span>
+            <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '10px', cursor: 'pointer' }}>Logout</button>
+        </div>
+      </nav>
 
-        <input 
-          placeholder="Username or Email" 
-          style={inpStyle} 
-          value={form.username}
-          onChange={(e) => setForm({ ...form, username: e.target.value })} 
-        />
+      <main style={{ flex: 1, background: ui.surface, borderRadius: '30px', padding: '30px', overflowY: 'auto', boxShadow: ui.shadow }}>
+        {messages.length === 0 && <div style={{ textAlign: 'center', marginTop: '100px', opacity: 0.5 }}><h1>How can I help you today?</h1></div>}
+        {messages.map((m, i) => (
+          <div key={i} style={{ marginBottom: '20px', padding: '20px', background: m.role === 'ai' ? ui.glass : '#f9f9fb', borderRadius: '20px', border: `1px solid ${ui.border}`, maxWidth: '80%', alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            <small style={{ color: ui.accent, fontWeight: 'bold' }}>{m.role.toUpperCase()}</small>
+            <p style={{ lineHeight: '1.6', marginTop: '10px' }}>{m.text}</p>
+          </div>
+        ))}
+        {loading && <p style={{ color: ui.accent }}>AI is thinking...</p>}
+        <div ref={scrollRef} />
+      </main>
+
+      <div style={{ display: 'flex', gap: '15px', marginTop: '20px', background: ui.surface, padding: '10px', borderRadius: '20px', boxShadow: ui.shadow }}>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} placeholder="Ask anything..." style={{ flex: 1, padding: '15px 20px', borderRadius: '15px', border: 'none', outline: 'none', fontSize: '16px' }} />
+        <button onClick={sendMessage} disabled={loading} style={{ background: ui.accent, color: '#fff', border: 'none', padding: '0 30px', borderRadius: '15px', fontWeight: 'bold', cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>SEND</button>
+      </div>
+    </div>
+  );
+}
+
+function AuthScreen({ setUser, ui }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ username: '', password: '', email: '' });
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const handleAuth = async () => {
+    if (!form.username || !form.password) return alert("Please fill all fields");
+    setAuthLoading(true);
+    const path = isLogin ? "/api/login" : "/api/register";
+    
+    try {
+      const res = await fetch(`${API_URL}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        localStorage.setItem('sl_user', JSON.stringify(data));
+        setUser(data);
+      } else {
+        alert(data.error || "Server error");
+      }
+    } catch (e) {
+      alert("Backend is waking up... Wait 30 seconds and try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef2f7' }}>
+      <div style={{ width: '380px', padding: '50px', background: '#fff', borderRadius: '35px', boxShadow: '0 20px 60px rgba(0,0,0,0.1)', textAlign: 'center' }}>
+        <h1 style={{ color: ui.accent, marginBottom: '10px', fontWeight: '900' }}>SkillLens</h1>
+        <p style={{ opacity: 0.6, marginBottom: '30px' }}>{isLogin ? 'Welcome back!' : 'Create your account'}</p>
         
-        {!isLogin && (
-          <input 
-            placeholder="Email Address" 
-            style={inpStyle} 
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })} 
-          />
-        )}
-
-        <input 
-          type="password" 
-          placeholder="Password" 
-          style={inpStyle} 
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })} 
-        />
-
-        <button 
-          onClick={handleAuth} 
-          disabled={loading}
-          style={{ 
-            width: '100%', 
-            padding: '15px', 
-            background: loading ? '#ccc' : '#8B5CF6', 
-            color: '#fff', 
-            border: 'none', 
-            borderRadius: '10px', 
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '16px',
-            fontWeight: 'bold'
-          }}
-        >
-          {loading ? 'Processing...' : (isLogin ? 'LOG IN' : 'SIGN UP')}
+        <input placeholder="Username or Email" style={authInp} onChange={e => setForm({...form, username: e.target.value})} />
+        {!isLogin && <input placeholder="Email Address" style={authInp} onChange={e => setForm({...form, email: e.target.value})} />}
+        <input type="password" placeholder="Password" style={authInp} onChange={e => setForm({...form, password: e.target.value})} />
+        
+        <button onClick={handleAuth} disabled={authLoading} style={{ width: '100%', padding: '16px', background: ui.accent, color: '#fff', border: 'none', borderRadius: '15px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', boxShadow: '0 5px 15px rgba(139, 92, 246, 0.3)' }}>
+          {authLoading ? 'CONNECTING...' : (isLogin ? 'LOG IN' : 'SIGN UP')}
         </button>
-
-        <p 
-          onClick={() => setIsLogin(!isLogin)} 
-          style={{ 
-            textAlign: 'center', 
-            marginTop: '20px', 
-            cursor: 'pointer', 
-            fontSize: '14px',
-            color: '#666'
-          }}
-        >
+        
+        <p onClick={() => setIsLogin(!isLogin)} style={{ marginTop: '25px', cursor: 'pointer', fontSize: '14px', color: ui.accent, fontWeight: '600' }}>
           {isLogin ? "Don't have an account? Register" : "Already have an account? Login"}
         </p>
       </div>
@@ -319,11 +147,4 @@ function AuthScreen({ setUser }) {
   );
 }
 
-const inpStyle = { 
-  width: '100%', 
-  padding: '14px', 
-  marginBottom: '15px', 
-  borderRadius: '8px', 
-  border: '1px solid #ddd',
-  fontSize: '16px'
-};
+const authInp = { width: '100%', padding: '15px', marginBottom: '15px', borderRadius: '12px', border: '1px solid #eee', background: '#f9f9fb', outline: 'none', boxSizing: 'border-box' };

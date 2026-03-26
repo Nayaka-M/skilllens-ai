@@ -1,109 +1,67 @@
 const express = require("express");
 const cors = require("cors");
-const bcrypt = require("bcryptjs");
 const { Pool } = require("pg");
+const bcrypt = require("bcryptjs"); // Use bcryptjs
+const Groq = require("groq-sdk");
 require("dotenv").config();
 
 const app = express();
-
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "*",
-  credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 
-// Neon-optimized Database Pool
+// Database Connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    require: true,
-    rejectUnauthorized: false
-  }
+  ssl: { rejectUnauthorized: false }, 
 });
 
-// Graceful connection test
-pool.connect()
-  .then(() => console.log("✅ Connected to Neon Postgres successfully"))
-  .catch(err => {
-    console.error("❌ Database connection failed:", err.message);
-    // Do NOT crash the server on cold start
-  });
-
-// Health check route
-app.get("/", (req, res) => {
-  res.send("✅ SkillLens API is LIVE on Neon 🚀");
-});
-
-app.get("/api/health", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
-    res.json({ status: "ok", db_time: result.rows[0].now });
-  } catch (err) {
-    res.status(500).json({ status: "error", message: err.message });
-  }
-});
-
-// ====================== REGISTER ======================
+// 1. REGISTRATION (Stores Hashed Password)
 app.post("/api/register", async (req, res) => {
   const { username, email, password } = req.body;
-
-  if (!username || !email || !password) {
-    return res.status(400).json({ error: "All fields required" });
-  }
-
   try {
-    const existing = await pool.query(
-      "SELECT id FROM users WHERE username=$1 OR email=$2",
-      [username, email]
-    );
-
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ error: "Username or email already exists" });
-    }
-
-    const salt = await bcrypt.genSalt(12);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
+    const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
       "INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email",
       [username, email, hashedPassword]
     );
-
-    res.status(201).json(result.rows[0]);
+    res.json(result.rows[0]);
   } catch (err) {
-    console.error("Register error:", err);
-    res.status(500).json({ error: "Registration failed" });
+    console.error("Reg Error:", err.message);
+    res.status(500).json({ error: "User already exists or database error" });
   }
 });
 
-// ====================== LOGIN ======================
+// 2. LOGIN (Compares Input to Hashed Password)
 app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ error: "Username/email and password required" });
-  }
-
   try {
+    // Allows login via username OR email
     const result = await pool.query(
-      "SELECT * FROM users WHERE username = $1 OR email = $1",
+      "SELECT * FROM users WHERE username=$1 OR email=$1",
       [username]
     );
 
-    const user = result.rows[0];
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: "Invalid credentials" });
+    if (result.rows.length > 0) {
+      const user = result.rows[0];
+      const isMatch = await bcrypt.compare(password, user.password);
+      
+      if (isMatch) {
+        delete user.password; // Securely remove password before sending
+        res.json(user);
+      } else {
+        res.status(401).json({ error: "Incorrect password" });
+      }
+    } else {
+      res.status(404).json({ error: "User not found" });
     }
-
-    delete user.password;
-    res.json(user);
   } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ error: "Login failed" });
+    res.status(500).json({ error: "Server error: " + err.message });
   }
 });
 
+app.get("/", (req, res) => res.send("SkillLens API is LIVE 🚀"));
+
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 SkillLens API running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

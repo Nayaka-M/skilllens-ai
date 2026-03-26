@@ -1,34 +1,20 @@
 {
-  "name": "backend",
+  "name": "skilllens-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "SkillLens AI Backend",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "axios": "^1.13.6",
-    "bcrypt": "^6.0.0",
-    "bcryptjs": "^3.0.3",
-    "body-parser": "^2.2.2",
-    "cors": "^2.8.6",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "groq-sdk": "^1.1.1",
-    "jsonwebtoken": "^9.0.3",
-    "multer": "^2.1.1",
-    "node-fetch": "^3.3.2",
-    "openai": "^6.22.0",
-    "pg": "^8.20.0",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1"
-  },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
+    "axios": "^1.6.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "groq-sdk": "^0.3.3",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3"
   }
 }
